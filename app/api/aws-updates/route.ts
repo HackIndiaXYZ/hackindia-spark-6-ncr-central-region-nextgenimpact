@@ -67,9 +67,36 @@ function scoreUpdate(item: RSSItem, role: string): number {
 
 function getPriority(item: RSSItem): "critical" | "high" | "normal" {
   const text = `${item.title} ${item.summary}`.toLowerCase();
-  if (text.includes("deprecat") || text.includes("end of support") || text.includes("breaking") || text.includes("mandatory") || text.includes("required")) return "critical";
-  if (text.includes("security") || text.includes("vulnerability") || text.includes("important") || text.includes("upgrade")) return "high";
+  if (text.includes("deprecat") || text.includes("end of support") || text.includes("breaking") || text.includes("mandatory") || text.includes("required") || text.includes("no longer available") || text.includes("will be blocked")) return "critical";
+  if (text.includes("security") || text.includes("vulnerability") || text.includes("important") || text.includes("upgrade") || text.includes("performance")) return "high";
   return "normal";
+}
+
+interface AIClassification {
+  priority: "critical" | "high" | "normal";
+  reason: string;
+  roleImpact: string;
+  actionRequired: boolean;
+  aiPowered: boolean;
+}
+
+async function getAIPriority(item: RSSItem, role: string, baseUrl: string): Promise<AIClassification | null> {
+  try {
+    const res = await fetch(`${baseUrl}/api/classify-priority`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: item.title,
+        summary: item.summary,
+        category: item.category,
+        role,
+      }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 function formatDate(pubDate: string): string {
@@ -94,6 +121,7 @@ function timeAgo(pubDate: string): string {
 export async function GET(req: NextRequest) {
   const role = req.nextUrl.searchParams.get("role") || "DevOps";
   const showAll = req.nextUrl.searchParams.get("all") === "true";
+  const useAI = req.nextUrl.searchParams.get("ai") !== "false"; // AI on by default
 
   try {
     const res = await fetch("https://aws.amazon.com/about-aws/whats-new/recent/feed/", {
@@ -106,13 +134,16 @@ export async function GET(req: NextRequest) {
     const xml = await res.text();
     const items = parseRSS(xml);
 
-    // Score and filter
+    // Score items by role relevance
     const scored = items.map((item) => ({
       ...item,
       score: scoreUpdate(item, role),
-      priority: getPriority(item),
+      priority: getPriority(item), // rule-based as default
       date: formatDate(item.pubDate),
       timeAgo: timeAgo(item.pubDate),
+      aiPowered: false,
+      roleImpact: "",
+      aiReason: "",
     }));
 
     // Sort by score desc, then by date
@@ -120,11 +151,46 @@ export async function GET(req: NextRequest) {
 
     // Filter: show all or only relevant (score > 0)
     const filtered = showAll ? scored : scored.filter((i) => i.score > 0 || i.priority === "critical");
+    const topItems = filtered.slice(0, 30);
+
+    // AI classification for top 10 most relevant items (to save quota)
+    if (useAI && process.env.GEMINI_API_KEY) {
+      const baseUrl = req.nextUrl.origin;
+      const top10 = topItems.slice(0, 10);
+
+      // Run AI classification in parallel for top items
+      const aiResults = await Promise.allSettled(
+        top10.map((item) => getAIPriority(item, role, baseUrl))
+      );
+
+      aiResults.forEach((result, index) => {
+        if (result.status === "fulfilled" && result.value) {
+          const ai = result.value;
+          top10[index].priority = ai.priority;
+          top10[index].aiPowered = ai.aiPowered;
+          top10[index].roleImpact = ai.roleImpact;
+          top10[index].aiReason = ai.reason;
+          // Set actionRequired if AI says so
+          if (ai.actionRequired && !top10[index].actionRequired) {
+            (top10[index] as Record<string, unknown>).actionRequired = ai.roleImpact;
+          }
+        }
+      });
+    }
+
+    // Re-sort after AI classification — critical items bubble up
+    topItems.sort((a, b) => {
+      const priorityOrder = { critical: 0, high: 1, normal: 2 };
+      const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+      if (pDiff !== 0) return pDiff;
+      return b.score - a.score;
+    });
 
     return NextResponse.json({
-      updates: filtered.slice(0, 30),
+      updates: topItems,
       total: items.length,
       role,
+      aiClassified: useAI,
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {

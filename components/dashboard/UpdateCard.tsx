@@ -4,8 +4,15 @@ import { Update } from "@/lib/data";
 import { PriorityBadge, Tag } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 
+// Extended type for AI-classified updates from RSS feed
+interface AIUpdate extends Update {
+  aiPowered?: boolean;
+  roleImpact?: string;
+  aiReason?: string;
+}
+
 interface UpdateCardProps {
-  update: Update;
+  update: AIUpdate;
   onToggleRead: (id: string) => void;
 }
 
@@ -29,6 +36,15 @@ export default function UpdateCard({ update, onToggleRead }: UpdateCardProps) {
           <PriorityBadge priority={update.priority} />
           {update.roles.map((r) => <Tag key={r} label={r} variant="role" />)}
           {update.services.slice(0, 2).map((s) => <Tag key={s} label={s} />)}
+          {/* AI Powered badge */}
+          {update.aiPowered && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-400 border border-purple-500/30"
+              title={update.aiReason || "Priority classified by AI"}
+            >
+              ✦ AI Classified
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {!update.isRead && (
@@ -36,6 +52,14 @@ export default function UpdateCard({ update, onToggleRead }: UpdateCardProps) {
           )}
         </div>
       </div>
+
+      {/* Role Impact (AI-generated) */}
+      {update.roleImpact && (
+        <div className="mb-2 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-xs text-purple-300 flex items-start gap-1.5">
+          <span className="mt-0.5 flex-shrink-0">🎯</span>
+          <span>{update.roleImpact}</span>
+        </div>
+      )}
 
       {/* Title */}
       <h3 className="text-base font-bold text-text-primary leading-snug mb-1.5">
