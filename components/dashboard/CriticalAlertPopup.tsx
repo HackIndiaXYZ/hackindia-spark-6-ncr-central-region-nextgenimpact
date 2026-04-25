@@ -1,9 +1,20 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { UPDATES } from "@/lib/data";
 import { useToast } from "@/components/ui/Toast";
 
-const ALERTS = [
+interface Alert {
+  id: string;
+  title: string;
+  desc: string;
+  time: string;
+  level: "critical" | "high";
+  isLive?: boolean;
+}
+
+// Static fallback alerts
+const STATIC_ALERTS: Alert[] = [
   {
     id: "ecs-fargate-deprecation",
     title: "AWS ECS Fargate Runtime Deprecation",
@@ -20,15 +31,70 @@ const ALERTS = [
   },
   {
     id: "iam-mandatory-mfa",
-    title: "CloudFormation Stack Policy Change",
-    desc: "New mandatory stack policies apply to all CloudFormation deployments from May 2026.",
+    title: "AWS IAM Mandatory MFA for Root Accounts",
+    desc: "MFA will be enforced for all root accounts from May 2026. Enable now.",
     time: "1d ago",
-    level: "high",
+    level: "critical",
   },
 ];
 
 export default function CriticalAlertPopup({ onClose }: { onClose: () => void }) {
   const { showToast } = useToast();
+  const [alerts, setAlerts] = useState<Alert[]>(STATIC_ALERTS);
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState("DevOps");
+  const [isLive, setIsLive] = useState(false);
+
+  useEffect(() => {
+    const role = localStorage.getItem("aws_pulse_role") || "DevOps";
+    setUserRole(role);
+
+    const fetchCritical = async () => {
+      try {
+        const res = await fetch(`/api/aws-updates?role=${encodeURIComponent(role)}&ai=false`);
+        const data = await res.json();
+
+        if (data.updates?.length > 0) {
+          // Filter only critical/high from live RSS
+          const liveAlerts: Alert[] = data.updates
+            .filter((u: Record<string, string>) => u.priority === "critical" || u.priority === "high")
+            .slice(0, 4)
+            .map((u: Record<string, string>) => ({
+              id: `rss-${u.id}`,
+              title: u.title?.length > 60 ? u.title.slice(0, 60) + "…" : u.title,
+              desc: u.summary?.length > 100 ? u.summary.slice(0, 100) + "…" : u.summary,
+              time: u.timeAgo || "Recently",
+              level: (u.priority === "critical" ? "critical" : "high") as "critical" | "high",
+              isLive: true,
+            }));
+
+          if (liveAlerts.length > 0) {
+            setAlerts(liveAlerts);
+            setIsLive(true);
+          } else {
+            // Fallback to static critical updates from data.ts
+            const staticCritical = UPDATES
+              .filter((u) => u.priority === "critical")
+              .slice(0, 3)
+              .map((u) => ({
+                id: u.id,
+                title: u.title.length > 60 ? u.title.slice(0, 60) + "…" : u.title,
+                desc: u.summary.length > 100 ? u.summary.slice(0, 100) + "…" : u.summary,
+                time: u.timeAgo,
+                level: "critical" as const,
+              }));
+            setAlerts(staticCritical);
+          }
+        }
+      } catch {
+        // Keep static fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCritical();
+  }, []);
 
   const handleDismissAll = () => {
     showToast("Notifications dismissed", "info", "🔕");
@@ -45,34 +111,58 @@ export default function CriticalAlertPopup({ onClose }: { onClose: () => void })
             <div className="flex items-center gap-2 mb-1">
               <span className="text-red-500 text-lg">🔴</span>
               <h2 id="alert-title" className="text-base font-bold text-text-primary">Critical Updates</h2>
+              {isLive && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">
+                  LIVE
+                </span>
+              )}
             </div>
-            <p className="text-sm text-text-secondary">3 unread alerts for DevOps Engineers</p>
+            <p className="text-sm text-text-secondary">
+              {loading ? "Fetching latest alerts…" : `${alerts.length} unread alerts for ${userRole} Engineers`}
+            </p>
           </div>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition-colors p-1 rounded-lg hover:bg-bg-hover" aria-label="Close alerts">
             ✕
           </button>
         </div>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="p-4 space-y-3">
+            {Array(3).fill(0).map((_, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-xl animate-pulse">
+                <div className="w-2.5 h-2.5 rounded-full bg-bg-hover mt-1 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="h-4 w-3/4 bg-bg-hover rounded mb-2" />
+                  <div className="h-3 w-full bg-bg-hover rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Alerts list */}
-        <div className="p-3 space-y-2">
-          {ALERTS.map((alert) => (
-            <div key={alert.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-bg-hover transition-all">
-              <div className="mt-1 flex-shrink-0">
-                <span className={`w-2.5 h-2.5 rounded-full block ${alert.level === "critical" ? "bg-red-500 pulse-dot" : "bg-orange-500"}`} aria-hidden="true" />
+        {!loading && (
+          <div className="p-3 space-y-2">
+            {alerts.map((alert) => (
+              <div key={alert.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-bg-hover transition-all">
+                <div className="mt-1 flex-shrink-0">
+                  <span className={`w-2.5 h-2.5 rounded-full block ${alert.level === "critical" ? "bg-red-500 pulse-dot" : "bg-orange-500"}`} aria-hidden="true" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-text-primary leading-snug">{alert.title}</p>
+                  <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{alert.desc}</p>
+                </div>
+                <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+                  <span className="text-xs text-text-secondary whitespace-nowrap">{alert.time}</span>
+                  <Link href={`/updates/${alert.id}`} className="text-xs text-accent-orange hover:underline font-medium whitespace-nowrap">
+                    View →
+                  </Link>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-text-primary leading-snug">{alert.title}</p>
-                <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{alert.desc}</p>
-              </div>
-              <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
-                <span className="text-xs text-text-secondary whitespace-nowrap">{alert.time}</span>
-                <Link href={`/updates/${alert.id}`} className="text-xs text-accent-orange hover:underline font-medium whitespace-nowrap">
-                  View →
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex gap-3 p-4 border-t border-border">

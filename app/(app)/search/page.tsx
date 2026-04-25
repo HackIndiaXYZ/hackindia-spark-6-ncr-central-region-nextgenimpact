@@ -116,6 +116,57 @@ export default function SearchPage() {
   const [roles, setRoles] = useState<string[]>([]);
   const [days, setDays] = useState<number | null>(null);
   const [sort, setSort] = useState<"relevance"|"date">("relevance");
+  const [liveResults, setLiveResults] = useState<typeof UPDATES>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [showLive, setShowLive] = useState(false);
+
+  // Fetch live RSS results when query changes
+  useEffect(() => {
+    if (!query.trim() || query.length < 3) {
+      setLiveResults([]);
+      return;
+    }
+    const role = localStorage.getItem("aws_pulse_role") || "DevOps";
+    setLiveLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/aws-updates?role=${encodeURIComponent(role)}&all=true&ai=false`);
+        const data = await res.json();
+        if (data.updates?.length > 0) {
+          const q = query.toLowerCase();
+          const matched = data.updates
+            .filter((u: Record<string, string>) =>
+              u.title?.toLowerCase().includes(q) ||
+              u.summary?.toLowerCase().includes(q) ||
+              u.category?.toLowerCase().includes(q)
+            )
+            .slice(0, 5)
+            .map((u: Record<string, string>) => ({
+              id: `rss-${u.id}`,
+              title: u.title || "",
+              date: u.date || "Recent",
+              timeAgo: u.timeAgo || "Recently",
+              priority: (u.priority as "critical" | "high" | "normal") || "normal",
+              roles: [role as never],
+              services: [],
+              category: u.category || "AWS Update",
+              summary: u.summary || "",
+              summaryHi: u.summary || "",
+              summaryHg: u.summary || "",
+              originalContent: "",
+              isRead: false,
+              isBookmarked: false,
+              views: 0,
+              sourceUrl: u.link || "https://aws.amazon.com/new/",
+            }));
+          setLiveResults(matched);
+          setShowLive(matched.length > 0);
+        }
+      } catch { /* ignore */ }
+      finally { setLiveLoading(false); }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const toggle = (arr: string[], val: string, set: (v: string[]) => void) =>
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
@@ -144,7 +195,7 @@ export default function SearchPage() {
     return p[a.priority] - p[b.priority];
   });
 
-  const clearAll = () => { setServices([]); setPriorities([]); setRoles([]); setDays(null); setQuery(""); };
+  const clearAll = () => { setServices([]); setPriorities([]); setRoles([]); setDays(null); setQuery(""); setLiveResults([]); };
 
   const PRIORITY_OPTS = [
     { val: "critical", label: "🔴 Critical" },
@@ -262,9 +313,50 @@ export default function SearchPage() {
               <span className="text-text-primary font-semibold">{results.length} result{results.length !== 1 ? "s" : ""}</span>
               {query && <> for &quot;<span className="text-accent-orange">{query}</span>&quot;</>}
               {hasFilters && <span className="text-text-secondary/60"> · filtered</span>}
+              {showLive && liveResults.length > 0 && (
+                <span className="text-green-400 ml-2">+ {liveResults.length} live from AWS</span>
+              )}
             </p>
           </div>
-          {results.length === 0 ? (
+
+          {/* Live RSS Results */}
+          {showLive && liveResults.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-bold text-green-400 uppercase tracking-wider">🟢 Live from AWS RSS</span>
+                <div className="h-px flex-1 bg-green-500/20" />
+              </div>
+              <div className="space-y-2">
+                {liveResults.map((u) => (
+                  <a key={u.id} href={u.sourceUrl} target="_blank" rel="noopener noreferrer"
+                    className="block bg-bg-card border border-green-500/20 rounded-xl p-4 hover:bg-bg-hover hover:border-green-500/40 transition-all group">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${u.priority === "critical" ? "bg-red-500/10 text-red-400 border border-red-500/20" : u.priority === "high" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" : "bg-gray-500/10 text-gray-400 border border-gray-500/20"}`}>
+                        {u.priority === "critical" ? "🔴" : u.priority === "high" ? "🟠" : "⚪"} {u.priority}
+                      </span>
+                      <span className="text-xs text-green-400 font-medium">📡 Live</span>
+                      <span className="text-xs text-text-secondary">{u.category}</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-text-primary mb-1 leading-snug group-hover:text-accent-orange transition-colors">
+                      {highlight(u.title, query)}
+                    </h3>
+                    <p className="text-xs text-text-secondary line-clamp-2">{highlight(u.summary, query)}</p>
+                    <p className="text-xs text-text-secondary mt-1">{u.timeAgo} · ↗ aws.amazon.com</p>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Live loading indicator */}
+          {liveLoading && query.length >= 3 && (
+            <div className="flex items-center gap-2 mb-4 text-xs text-text-secondary">
+              <span className="animate-spin">⟳</span> Searching live AWS updates…
+            </div>
+          )}
+
+          {/* Static results */}
+          {results.length === 0 && !liveLoading ? (
             <div className="text-center py-16 bg-bg-card rounded-xl border border-border">
               <span className="text-4xl mb-4 block">🔍</span>
               <p className="text-text-primary font-semibold mb-1">No results found</p>
