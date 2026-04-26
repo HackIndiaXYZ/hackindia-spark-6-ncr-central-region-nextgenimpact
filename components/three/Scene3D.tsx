@@ -24,7 +24,6 @@ const AWS_SERVICES = [
 function ServiceCube({ label, x, y, z, color }: { label: string; x: number; y: number; z: number; color: string }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const speed = useMemo(() => 0.3 + Math.random() * 0.4, []);
-  const offset = useMemo(() => Math.random() * Math.PI * 2, []);
 
   useFrame((state) => {
     if (!meshRef.current) return;

@@ -237,14 +237,15 @@ function useHexTex(label: string, color: string, bg: string) {
   }, [label, color, bg]);
 }
 
-function ServiceCard({ label, pos, color, bg, fo=0 }: {
+function ServiceCard({ label, pos, color, bg, fo = 0 }: {
   label: string; pos: [number,number,number]; color: string; bg: string; fo?: number;
 }) {
   const tex = useHexTex(label, color, bg);
   const ref = useRef<THREE.Group>(null);
   const baseY = pos[1];
+  const floatOffset = fo;
   useFrame((s) => {
-    if (ref.current) ref.current.position.y = baseY + Math.sin(s.clock.elapsedTime*0.65+fo)*0.09;
+    if (ref.current) ref.current.position.y = baseY + Math.sin(s.clock.elapsedTime * 0.65 + floatOffset) * 0.09;
   });
   return (
     <group ref={ref} position={pos}>

@@ -101,7 +101,7 @@ const SERVICES = [
   { label: "CDK", pos: [-1.5, 3, -4] as [number,number,number],   color: "#569AFF" },
 ];
 
-function ServiceTag({ label, pos, color }: { label: string; pos: [number,number,number]; color: string }) {
+function ServiceTag({ pos, color }: { label: string; pos: [number,number,number]; color: string }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const speed = useMemo(() => 0.2 + Math.random() * 0.3, []);
 

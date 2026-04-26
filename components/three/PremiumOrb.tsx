@@ -367,7 +367,6 @@ function ServiceCard({ label, pos, color, bgColor, floatOffset = 0 }: {
       ref.current.position.y = baseY + Math.sin(s.clock.elapsedTime * 0.7 + floatOffset) * 0.08;
     }
   });
-
   return (
     <group ref={ref} position={pos}>
       <mesh>
