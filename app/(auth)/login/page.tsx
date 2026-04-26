@@ -133,9 +133,9 @@ export default function LoginPage() {
           {/* Testimonial */}
           <div className="p-4 rounded-2xl"
             style={{background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)"}}>
-            <div className="text-purple-400 text-2xl font-serif leading-none mb-2">"</div>
+            <div className="text-purple-400 text-2xl font-serif leading-none mb-2">&ldquo;</div>
             <p className="text-sm italic leading-relaxed mb-3" style={{color:"rgba(255,255,255,0.65)"}}>
-              "AWS Pulse saved us from a production outage."
+              &ldquo;AWS Pulse saved us from a production outage.&rdquo;
             </p>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

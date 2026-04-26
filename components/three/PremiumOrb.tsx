@@ -227,8 +227,11 @@ function useIconTexture(label: string, color: string, bgColor: string) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
       const a = (Math.PI / 3) * i - Math.PI / 6;
-      i === 0 ? ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a))
-              : ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      if (i === 0) {
+        ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      } else {
+        ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      }
     }
     ctx.closePath();
 
