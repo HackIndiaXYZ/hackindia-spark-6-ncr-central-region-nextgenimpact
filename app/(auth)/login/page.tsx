@@ -2,7 +2,6 @@
 import { useState, Suspense, lazy, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getUser } from "@/lib/userStore";
 
 const CenterOrb = lazy(() => import("@/components/three/CenterOrb"));
 
@@ -31,27 +30,17 @@ export default function LoginPage() {
 
   useEffect(() => {
     setTimeout(() => setMounted(true), 80);
-    // Do NOT auto-redirect — user must explicitly log in
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email.includes("@")) { setError("Enter a valid email"); return; }
-    if (pw.length < 3) { setError("Enter your password"); return; }
 
     setLoading(true);
-
-    // Check if user exists in localStorage (registered before)
-    const existingUser = getUser();
-    if (existingUser && existingUser.email === email.toLowerCase()) {
-      // ✅ Returning user — go to dashboard with their saved data
-      setTimeout(() => router.push("/dashboard"), 800);
-    } else {
-      // ❌ User not found — ask them to register first
-      setLoading(false);
-      setError("Account not found. Please create an account first.");
-    }
+    // Save email to localStorage so dashboard can use it
+    localStorage.setItem("aws_pulse_email", email.toLowerCase());
+    setTimeout(() => router.push("/dashboard"), 800);
   };
 
   return (
